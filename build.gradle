@@ -1,0 +1,33 @@
+import java.nio.charset.StandardCharsets
+
+apply plugin: 'java'
+apply plugin: 'idea'
+apply plugin: 'application'
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+sourceCompatibility = JavaVersion.VERSION_11
+targetCompatibility = JavaVersion.VERSION_11
+[compileJava, compileTestJava].options*.encoding = StandardCharsets.UTF_8.name()
+
+dependencies {
+    implementation "com.typesafe.akka:akka-actor-typed_3:$akkaVersion"
+    implementation "ch.qos.logback:logback-classic:$logbackVersion"
+    implementation "org.telegram:telegrambots:$telegramVersion"
+    implementation "org.apache.commons:commons-lang3:$commonsLangVersion"
+    implementation "org.yaml:snakeyaml:$snakeYamlVersion"
+    implementation "org.apache.httpcomponents.client5:httpclient5:$httpClientVersion"
+    implementation "com.fasterxml.jackson.core:jackson-core:$jacksonVersion"
+
+    compileOnly "org.projectlombok:lombok:$lombokVersion"
+    annotationProcessor "org.projectlombok:lombok:$lombokVersion"
+
+    testImplementation "com.typesafe.akka:akka-actor-testkit-typed_3:$akkaVersion"
+    testImplementation "com.typesafe.akka:akka-testkit_3:$akkaVersion"
+    testImplementation "junit:junit:$junitVersion"
+}
+
+mainClassName = 'org.yagi.motel.Kernel'

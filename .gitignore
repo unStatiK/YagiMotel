@@ -1,0 +1,16 @@
+target/
+build/
+
+.settings
+.project
+.classpath
+.gradle
+
+.idea
+*.iml
+
+.metals
+.bloop
+
+config/config.yaml
+
