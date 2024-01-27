@@ -135,6 +135,7 @@ public class Kernel {
                 .startRegistrationCommandDispatcherActor(startRegistrationCommandDispatcherActor)
                 .closeRegistrationCommandDispatcherActor(closeRegistrationCommandDispatcherActor)
                 .statusCommandDispatcherActor(statusCommandDispatcherActor)
+                .checkNotificationsDispatcherActor(checkNotificationsDispatcherActor)
                 .build();
 
         return actorSystem.actorOf(CommandDispatcherActor.props(commandDispatchersHolder, commandResultsQueue)

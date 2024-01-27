@@ -8,6 +8,7 @@ import org.yagi.motel.bot.NotificationType;
 import org.yagi.motel.config.AppConfig;
 import org.yagi.motel.http.RestClient;
 import org.yagi.motel.message.CheckNotificationMessage;
+import org.yagi.motel.message.InputCommandMessage;
 import org.yagi.motel.model.container.NotificationContainer;
 import org.yagi.motel.request.CheckNotificationRequest;
 import org.yagi.motel.request.ProcessNotificationRequest;
@@ -28,11 +29,13 @@ public class CheckNotificationsDispatcherActor extends AbstractActor {
     private final String portalProcessNotificationUrl;
     private final AppConfig config;
     private final ObjectMapper mapper;
+    private boolean processingUpdateIsDisable;
 
     public CheckNotificationsDispatcherActor(AppConfig config, BlockingQueue<NotificationContainer> notificationsQueue) {
         this.config = config;
         this.notificationsQueue = notificationsQueue;
         this.mapper = new ObjectMapper();
+        this.processingUpdateIsDisable = config.getDisableOnStart();
         this.portalCheckNotificationUrl =
                 UrlHelper.normalizeUrl(String.format("%s/api/v0/autobot/check_notifications", config.getPortalUrl()));
         this.portalProcessNotificationUrl =
@@ -47,41 +50,60 @@ public class CheckNotificationsDispatcherActor extends AbstractActor {
     public Receive createReceive() {
         return receiveBuilder()
                 .match(
+                        InputCommandMessage.class,
+                        message -> {
+                            if (message.getType() != null) {
+                                switch (message.getType()) {
+                                    case START_SERVE:
+                                        this.processingUpdateIsDisable = false;
+                                        break;
+                                    case STOP_SERVE:
+                                        this.processingUpdateIsDisable = true;
+                                        break;
+                                    default:
+                                        break;
+                                }
+                            }
+                        }
+                )
+                .match(
                         CheckNotificationMessage.class,
                         message -> {
-                            CheckNotificationRequest request = CheckNotificationRequest.builder()
-                                    .apiToken(config.getAutobotApiToken())
-                                    .tournamentId(config.getTournamentId())
-                                    .lobbyId(config.getLobbyId())
-                                    .build();
+                            if (!processingUpdateIsDisable) {
+                                CheckNotificationRequest request = CheckNotificationRequest.builder()
+                                        .apiToken(config.getAutobotApiToken())
+                                        .tournamentId(config.getTournamentId())
+                                        .lobbyId(config.getLobbyId())
+                                        .build();
 
-                            CheckNotificationResponse checkNotificationResponse =
-                                    RestClient.sendPost(mapper,
-                                            RestClient.preparePostRequest(portalCheckNotificationUrl, request, mapper),
-                                            CheckNotificationResponse.class);
+                                CheckNotificationResponse checkNotificationResponse =
+                                        RestClient.sendPost(mapper,
+                                                RestClient.preparePostRequest(portalCheckNotificationUrl, request, mapper),
+                                                CheckNotificationResponse.class);
 
-                            if (checkNotificationResponse != null && !checkNotificationResponse.getNotifications().isEmpty()) {
-                                Notification notification = checkNotificationResponse.getNotifications()
-                                        .stream().findFirst().orElse(null);
+                                if (checkNotificationResponse != null && !checkNotificationResponse.getNotifications().isEmpty()) {
+                                    Notification notification = checkNotificationResponse.getNotifications()
+                                            .stream().findFirst().orElse(null);
 
-                                if (notification != null) {
-                                    ProcessNotificationRequest processNotificationRequest =
-                                            ProcessNotificationRequest.builder()
-                                                    .apiToken(config.getAutobotApiToken())
-                                                    .tournamentId(config.getTournamentId())
-                                                    .lobbyId(config.getLobbyId())
-                                                    .notificationId(notification.getNotificationId())
-                                                    .build();
-                                    BaseResponse baseResponse = RestClient.sendPost(mapper,
-                                            RestClient.preparePostRequest(portalProcessNotificationUrl, processNotificationRequest, mapper),
-                                            BaseResponse.class);
+                                    if (notification != null) {
+                                        ProcessNotificationRequest processNotificationRequest =
+                                                ProcessNotificationRequest.builder()
+                                                        .apiToken(config.getAutobotApiToken())
+                                                        .tournamentId(config.getTournamentId())
+                                                        .lobbyId(config.getLobbyId())
+                                                        .notificationId(notification.getNotificationId())
+                                                        .build();
+                                        BaseResponse baseResponse = RestClient.sendPost(mapper,
+                                                RestClient.preparePostRequest(portalProcessNotificationUrl, processNotificationRequest, mapper),
+                                                BaseResponse.class);
 
-                                    if (baseResponse != null && Boolean.TRUE.equals(baseResponse.getSuccess())) {
-                                        String notificationMessage = notification.getMessage();
-                                        notificationsQueue.put(NotificationContainer.builder()
-                                                .notificationType(NotificationType.TOURNAMENT)
-                                                .message(notificationMessage)
-                                                .build());
+                                        if (baseResponse != null && Boolean.TRUE.equals(baseResponse.getSuccess())) {
+                                            String notificationMessage = notification.getMessage();
+                                            notificationsQueue.put(NotificationContainer.builder()
+                                                    .notificationType(NotificationType.TOURNAMENT)
+                                                    .message(notificationMessage)
+                                                    .build());
+                                        }
                                     }
                                 }
                             }

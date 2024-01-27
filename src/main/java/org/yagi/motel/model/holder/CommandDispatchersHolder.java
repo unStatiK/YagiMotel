@@ -13,4 +13,5 @@ public class CommandDispatchersHolder {
     private ActorRef meCommandDispatcherActor;
     private ActorRef addCommandDispatcherActor;
     private ActorRef statusCommandDispatcherActor;
+    private ActorRef checkNotificationsDispatcherActor;
 }

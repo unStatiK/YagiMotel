@@ -47,6 +47,7 @@ public class CommandDispatcherActor extends AbstractActor {
                                         commandDispatchersHolder.getAddCommandDispatcherActor().tell(message, getSelf());
                                         break;
                                     case START_SERVE:
+                                        commandDispatchersHolder.getCheckNotificationsDispatcherActor().tell(message, getSelf());
                                         commandResultsQueue.put(ResultCommandContainer.builder()
                                                 .replyType(ReplyType.ENABLE_UPDATE_PROCESSING)
                                                 .resultMessage(message.getPayload().getMessageValue())
@@ -54,6 +55,7 @@ public class CommandDispatcherActor extends AbstractActor {
                                                 .build());
                                         break;
                                     case STOP_SERVE:
+                                        commandDispatchersHolder.getCheckNotificationsDispatcherActor().tell(message, getSelf());
                                         commandResultsQueue.put(ResultCommandContainer.builder()
                                                 .replyType(ReplyType.DISABLE_UPDATE_PROCESSING)
                                                 .resultMessage(message.getPayload().getMessageValue())
