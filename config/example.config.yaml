@@ -9,7 +9,7 @@ disableOnStart: false
 adminChatId: -1
 tournamentChatId: -1
 checkNotificationsIntervalInSeconds: 5
-tensoulAppToken: "token"
+tensoulAppToken: 'token'
 tensoulUrl: 'http://127.0.0.1:9187'
 portalUrl: 'http://127.0.0.1:9999'
 autobotApiToken: 'autobot_token'
