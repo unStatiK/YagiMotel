@@ -91,6 +91,10 @@ public class GameFinishRequest {
             return false;
         }
 
+        if (((List<?>) logMap.get("log")).isEmpty()) {
+            return false;
+        }
+
         return isValid;
     }
 }
