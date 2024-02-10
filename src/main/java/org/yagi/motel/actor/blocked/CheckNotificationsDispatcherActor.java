@@ -29,7 +29,7 @@ public class CheckNotificationsDispatcherActor extends AbstractActor {
     private final String portalProcessNotificationUrl;
     private final AppConfig config;
     private final ObjectMapper mapper;
-    private boolean processingUpdateIsDisable;
+    private volatile boolean processingUpdateIsDisable;
 
     public CheckNotificationsDispatcherActor(AppConfig config, BlockingQueue<NotificationContainer> notificationsQueue) {
         this.config = config;
