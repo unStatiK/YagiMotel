@@ -22,7 +22,8 @@ public class LogCommandHandler extends BaseHandler implements CommandHandler {
     public void handleCommand(final CommandContext context) {
         String[] commandArgs = context.getCommandArgs();
         if (commandArgs.length >= 2) {
-            if (context.getSenderChatId().equals(getConfig().getAdminChatId())) {
+            boolean isTenhouLog = commandArgs[1].contains("tenhou.net");
+            if (isTenhouLog || context.getSenderChatId().equals(getConfig().getAdminChatId())) {
                 String commandValue = commandArgs[1];
                 getCommandDispatcherActor().tell(InputCommandMessage.builder()
                                 .type(getType())
