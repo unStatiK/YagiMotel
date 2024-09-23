@@ -31,7 +31,8 @@ public class GameFinishRequestTest {
         config.setLobbyId(lobbyId);
         config.setTournamentId(tournamentId);
 
-        GameFinishRequest gameFinishRequest = GameFinishRequest.convertFromTensoulMap(config, objectMapper, tensoulReplayInfo);
+        GameFinishRequest gameFinishRequest =
+                GameFinishRequest.convertFromTensoulMap(config, objectMapper, tensoulReplayInfo).get();
 
         Assert.assertNotNull(gameFinishRequest);
         Assert.assertEquals(autobotToken, gameFinishRequest.getApiToken());
@@ -65,7 +66,8 @@ public class GameFinishRequestTest {
         config.setLobbyId(lobbyId);
         config.setTournamentId(tournamentId);
 
-        GameFinishRequest gameFinishRequest = GameFinishRequest.convertFromTensoulMap(config, objectMapper, tensoulReplayInfo);
+        GameFinishRequest gameFinishRequest =
+                GameFinishRequest.convertFromTensoulMap(config, objectMapper, tensoulReplayInfo).get();
 
         Assert.assertNotNull(gameFinishRequest);
         Assert.assertEquals(autobotToken, gameFinishRequest.getApiToken());

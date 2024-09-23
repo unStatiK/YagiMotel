@@ -1,5 +1,6 @@
 package org.yagi.motel.bot;
 
+@SuppressWarnings("checkstyle:MissingJavadocType")
 public enum ReplyType {
-    SEND_MESSAGE, ENABLE_UPDATE_PROCESSING, DISABLE_UPDATE_PROCESSING
+    SEND_MESSAGE, CALLBACK
 }

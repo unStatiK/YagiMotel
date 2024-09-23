@@ -21,6 +21,10 @@ dependencies {
     implementation "org.yaml:snakeyaml:$snakeYamlVersion"
     implementation "org.apache.httpcomponents.client5:httpclient5:$httpClientVersion"
     implementation "com.fasterxml.jackson.core:jackson-core:$jacksonVersion"
+    implementation "com.discord4j:discord4j-core:$discordVersion"
+    implementation "org.jooq:jooq:$jooqVersion"
+    implementation "org.xerial:sqlite-jdbc:$sqliteJdbcVersion"
+    implementation "jakarta.xml.bind:jakarta.xml.bind-api:$jakartaXmlBindVersion"
 
     compileOnly "org.projectlombok:lombok:$lombokVersion"
     annotationProcessor "org.projectlombok:lombok:$lombokVersion"

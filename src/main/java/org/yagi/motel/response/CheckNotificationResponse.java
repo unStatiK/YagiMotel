@@ -1,10 +1,10 @@
 package org.yagi.motel.response;
 
+import java.util.List;
 import lombok.Data;
 
-import java.util.List;
-
 @Data
+@SuppressWarnings("checkstyle:MissingJavadocType")
 public class CheckNotificationResponse {
-    private List<Notification> notifications;
+  private List<Notification> notifications;
 }

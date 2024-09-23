@@ -13,4 +13,6 @@ build/
 .bloop
 
 config/config.yaml
+*.db
+*.sqlite
 

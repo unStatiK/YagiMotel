@@ -1,10 +1,14 @@
 package org.yagi.motel.actor.blocked;
 
+import static org.yagi.motel.utils.ReplyTypeUtils.getReplyType;
+
 import akka.actor.AbstractActor;
 import akka.actor.Props;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
 import lombok.extern.slf4j.Slf4j;
-import org.yagi.motel.bot.ReplyType;
+import org.yagi.motel.bot.PlatformType;
 import org.yagi.motel.config.AppConfig;
 import org.yagi.motel.http.RestClient;
 import org.yagi.motel.message.InputCommandMessage;
@@ -13,68 +17,85 @@ import org.yagi.motel.request.ConfirmPlayerRequest;
 import org.yagi.motel.response.ConfirmPlayerResponse;
 import org.yagi.motel.utils.UrlHelper;
 
-import java.util.concurrent.BlockingQueue;
-
 @Slf4j
+@SuppressWarnings("checkstyle:MissingJavadocType")
 public class MeCommandDispatcherActor extends AbstractActor {
 
-    public static String ACTOR_NAME = "me-command-dispatcher-actor";
+  public static String ACTOR_NAME = "me-command-dispatcher-actor";
 
-    private final BlockingQueue<ResultCommandContainer> commandResultsQueue;
-    private final AppConfig config;
-    private final ObjectMapper mapper;
-    private final String portalConfirmPlayerUrl;
+  private final BlockingQueue<ResultCommandContainer> commandResultsQueue;
+  private final AppConfig config;
+  private final ObjectMapper mapper;
+  private final String portalConfirmPlayerUrl;
 
-    public MeCommandDispatcherActor(AppConfig config,
-                                    BlockingQueue<ResultCommandContainer> commandResultsQueue) {
-        this.config = config;
-        this.commandResultsQueue = commandResultsQueue;
-        this.mapper = new ObjectMapper();
-        this.portalConfirmPlayerUrl =
-                UrlHelper.normalizeUrl(String.format("%s/api/v0/autobot/confirm_player", config.getPortalUrl()));
-    }
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
+  public MeCommandDispatcherActor(
+      AppConfig config, BlockingQueue<ResultCommandContainer> commandResultsQueue) {
+    this.config = config;
+    this.commandResultsQueue = commandResultsQueue;
+    this.mapper = new ObjectMapper();
+    this.portalConfirmPlayerUrl =
+        UrlHelper.normalizeUrl(
+            String.format("%s/api/v0/autobot/confirm_player", config.getPortalUrl()));
+  }
 
-    public static Props props(AppConfig config, BlockingQueue<ResultCommandContainer> commandResultsQueue) {
-        return Props.create(MeCommandDispatcherActor.class, config, commandResultsQueue);
-    }
+  public static Props props(
+      AppConfig config, BlockingQueue<ResultCommandContainer> commandResultsQueue) {
+    return Props.create(MeCommandDispatcherActor.class, config, commandResultsQueue);
+  }
 
-    @Override
-    public Receive createReceive() {
-        return receiveBuilder()
-                .match(
-                        InputCommandMessage.class,
-                        message -> {
-                            if (message.getType() != null) {
-                                switch (message.getType()) {
-                                    case ME:
-                                        ConfirmPlayerRequest request = ConfirmPlayerRequest.builder()
-                                                .apiToken(config.getAutobotApiToken())
-                                                .tournamentId(config.getTournamentId())
-                                                .lobbyId(config.getLobbyId())
-                                                .nickname(message.getPayload().getMessageValue())
-                                                .telegramUsername(message.getPayload().getTelegramUsername())
-                                                .build();
+  @Override
+  public Receive createReceive() {
+    return receiveBuilder()
+        .match(
+            InputCommandMessage.class,
+            message -> {
+              if (message.getType() != null) {
+                switch (message.getType()) {
+                  case ME:
+                    ConfirmPlayerRequest request =
+                        ConfirmPlayerRequest.builder()
+                            .apiToken(config.getAutobotApiToken())
+                            .tournamentId(config.getTournamentId())
+                            .lobbyId(config.getLobbyId())
+                            .nickname(message.getPayload().getMessageValue())
+                            .telegramUsername(message.getPlatformType() == PlatformType.TG
+                                ? message.getPayload().getUsername() : null)
+                            .discordUsername(message.getPlatformType() == PlatformType.DISCORD
+                                ? message.getPayload().getUsername() : null)
+                            .lang(message.getRequestedResponseLang())
+                            .build();
 
-                                        ConfirmPlayerResponse confirmPlayerResponse =
-                                                RestClient.sendPost(mapper,
-                                                        RestClient.preparePostRequest(portalConfirmPlayerUrl, request, mapper),
-                                                        ConfirmPlayerResponse.class);
+                    Optional<ConfirmPlayerResponse> confirmPlayerResponse =
+                        RestClient.sendPost(
+                            mapper,
+                            RestClient.preparePostRequest(portalConfirmPlayerUrl, request, mapper),
+                            ConfirmPlayerResponse.class);
 
-                                        commandResultsQueue.put(ResultCommandContainer.builder()
-                                                .replyType(ReplyType.SEND_MESSAGE)
-                                                .resultMessage(String.format("@%s %s", message.getPayload().getTelegramUsername(),
-                                                        confirmPlayerResponse.getMessage()))
-                                                .replyChatId(message.getPayload().getSenderChatId())
-                                                .build());
-                                        break;
-                                    default:
-                                        break;
-                                }
-                            } else {
-                                log.warn("receive untyped message!");
-                            }
-                        })
-                .matchAny(o -> log.warn("received unknown message"))
-                .build();
-    }
+                    if (confirmPlayerResponse.isPresent()) {
+                      commandResultsQueue.put(
+                          ResultCommandContainer.builder()
+                              .replyType(getReplyType(message))
+                              .resultMessage(
+                                  String.format(
+                                      message.getPlatformType() == PlatformType.TG ? "@%s %s" :
+                                          "%s %s",
+                                      message.getPayload().getUsername(),
+                                      confirmPlayerResponse.get().getMessage()))
+                              .replyChatId(message.getPayload().getSenderChatId())
+                              .replyCallback(message.getReplyCallBack())
+                              .platformType(message.getPlatformType())
+                              .build());
+                    }
+                    break;
+                  default:
+                    break;
+                }
+              } else {
+                log.warn("receive untyped message!");
+              }
+            })
+        .matchAny(o -> log.warn("received unknown message"))
+        .build();
+  }
 }

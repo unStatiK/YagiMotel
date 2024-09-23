@@ -1,12 +1,17 @@
 package org.yagi.motel.actor.blocked;
 
+import static org.yagi.motel.utils.ReplyTypeUtils.getReplyType;
+
 import akka.actor.AbstractActor;
 import akka.actor.Props;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.yagi.motel.bot.ReplyType;
 import org.yagi.motel.config.AppConfig;
 import org.yagi.motel.http.RestClient;
 import org.yagi.motel.message.InputCommandMessage;
@@ -18,147 +23,185 @@ import org.yagi.motel.response.GameFinishResponse;
 import org.yagi.motel.utils.ReplayUrlHelper;
 import org.yagi.motel.utils.UrlHelper;
 
-import java.io.IOException;
-import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-
 @Slf4j
+@SuppressWarnings("checkstyle:MissingJavadocType")
 public class LogCommandDispatcherActor extends AbstractActor {
 
-    public static String ACTOR_NAME = "log-command-dispatcher-actor";
+  public static String ACTOR_NAME = "log-command-dispatcher-actor";
 
-    private final AppConfig config;
-    private final BlockingQueue<ResultCommandContainer> commandResultsQueue;
-    private final ObjectMapper mapper;
-    private final String portalGameFinishUrl;
-    private final String portalAddGameLogUrl;
+  private final AppConfig config;
+  private final BlockingQueue<ResultCommandContainer> commandResultsQueue;
+  private final ObjectMapper mapper;
+  private final String portalGameFinishUrl;
+  private final String portalAddGameLogUrl;
 
-    public LogCommandDispatcherActor(AppConfig config, BlockingQueue<ResultCommandContainer> commandResultsQueue) {
-        this.config = config;
-        this.commandResultsQueue = commandResultsQueue;
-        this.mapper = getTensoulMapper();
-        this.portalGameFinishUrl =
-                UrlHelper.normalizeUrl(String.format("%s/api/v0/autobot/game_finish", config.getPortalUrl()));
-        this.portalAddGameLogUrl =
-                UrlHelper.normalizeUrl(String.format("%s/api/v0/autobot/add_game_log", config.getPortalUrl()));
-    }
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
+  public LogCommandDispatcherActor(
+      AppConfig config, BlockingQueue<ResultCommandContainer> commandResultsQueue) {
+    this.config = config;
+    this.commandResultsQueue = commandResultsQueue;
+    this.mapper = getTensoulMapper();
+    this.portalGameFinishUrl =
+        UrlHelper.normalizeUrl(
+            String.format("%s/api/v0/autobot/game_finish", config.getPortalUrl()));
+    this.portalAddGameLogUrl =
+        UrlHelper.normalizeUrl(
+            String.format("%s/api/v0/autobot/add_game_log", config.getPortalUrl()));
+  }
 
-    public static ObjectMapper getTensoulMapper() {
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.configure(DeserializationFeature.USE_LONG_FOR_INTS, true);
-        return objectMapper;
-    }
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
+  public static ObjectMapper getTensoulMapper() {
+    ObjectMapper objectMapper = new ObjectMapper();
+    objectMapper.configure(DeserializationFeature.USE_LONG_FOR_INTS, true);
+    return objectMapper;
+  }
 
-    public static Props props(AppConfig config, BlockingQueue<ResultCommandContainer> commandResultsQueue) {
-        return Props.create(LogCommandDispatcherActor.class, config, commandResultsQueue);
-    }
+  public static Props props(
+      AppConfig config, BlockingQueue<ResultCommandContainer> commandResultsQueue) {
+    return Props.create(LogCommandDispatcherActor.class, config, commandResultsQueue);
+  }
 
-    private void processMajsoulLog(InputCommandMessage message) throws IOException, InterruptedException {
-        String hash = ReplayUrlHelper.extractHash(message.getPayload().getMessageValue());
-        if (!StringUtils.isEmpty(hash)) {
-            String tensoulUrl = String.format("%s/convert/?id=%s&lobby_id=%d&app_token=%s", config.getTensoulUrl(),
-                    hash, config.getLobbyId(), config.getTensoulAppToken());
-            tensoulUrl = UrlHelper.normalizeUrl(tensoulUrl);
-            Map replayInfo = RestClient.sendGet(mapper, RestClient.prepareGetRequest(tensoulUrl), Map.class);
+  private void processMajsoulLog(InputCommandMessage message)
+      throws IOException, InterruptedException {
+    Optional<String> hashOptional =
+        ReplayUrlHelper.extractHash(message.getPayload().getMessageValue());
+    if (hashOptional.isPresent() && !StringUtils.isEmpty(hashOptional.get())) {
+      String hash = hashOptional.get();
+      String tensoulUrl =
+          String.format(
+              "%s/convert/?id=%s&lobby_id=%d&app_token=%s",
+              config.getTensoulUrl(), hash, config.getLobbyId(), config.getTensoulAppToken());
+      tensoulUrl = UrlHelper.normalizeUrl(tensoulUrl);
+      Optional<Map> replayInfo =
+          RestClient.sendGet(mapper, RestClient.prepareGetRequest(tensoulUrl), Map.class);
 
-            if (replayInfo != null) {
-                GameFinishRequest gameFinishRequest =
-                        GameFinishRequest.convertFromTensoulMap(config, mapper, replayInfo);
-                if (gameFinishRequest != null) {
-                    //todo handle error
-                    GameFinishResponse response = RestClient.sendPost(mapper,
-                            RestClient.preparePostRequest(portalGameFinishUrl, gameFinishRequest, mapper),
-                            GameFinishResponse.class);
+      if (replayInfo.isPresent()) {
+        Optional<GameFinishRequest> gameFinishRequest =
+            GameFinishRequest.convertFromTensoulMap(config, mapper, replayInfo.get());
+        if (gameFinishRequest.isPresent()) {
+          // todo handle error
+          Optional<GameFinishResponse> response =
+              RestClient.sendPost(
+                  mapper,
+                  RestClient.preparePostRequest(
+                      portalGameFinishUrl, gameFinishRequest.get(), mapper),
+                  GameFinishResponse.class);
 
-                    if (response != null) {
-                        commandResultsQueue.put(ResultCommandContainer.builder()
-                                .replyType(ReplyType.SEND_MESSAGE)
-                                .resultMessage(response.getMessage())
-                                .replyChatId(message.getPayload().getSenderChatId())
-                                .build());
-                    } else {
-                        commandResultsQueue.put(ResultCommandContainer.builder()
-                                .replyType(ReplyType.SEND_MESSAGE)
-                                .resultMessage("Ошибка добавления реплея на портал!")
-                                .replyChatId(message.getPayload().getSenderChatId())
-                                .build());
-                    }
-
-                } else {
-                    commandResultsQueue.put(ResultCommandContainer.builder()
-                            .replyType(ReplyType.SEND_MESSAGE)
-                            .resultMessage(String.format("Получен невалидный tensoul контент для реплея %s!", hash))
-                            .replyChatId(message.getPayload().getSenderChatId())
-                            .build());
-                }
-
-            } else {
-                commandResultsQueue.put(ResultCommandContainer.builder()
-                        .replyType(ReplyType.SEND_MESSAGE)
-                        .resultMessage("Не удалось сконвертировать реплей в tenhou.net формат!")
-                        .replyChatId(message.getPayload().getSenderChatId())
-                        .build());
-            }
-        } else {
-            commandResultsQueue.put(ResultCommandContainer.builder()
-                    .replyType(ReplyType.SEND_MESSAGE)
-                    .resultMessage("Не удалось извлечь id реплея, проверьте URL!")
+          if (response.isPresent()) {
+            commandResultsQueue.put(
+                ResultCommandContainer.builder()
+                    .replyType(getReplyType(message))
+                    .resultMessage(response.get().getMessage())
                     .replyChatId(message.getPayload().getSenderChatId())
+                    .platformType(message.getPlatformType())
+                    .replyCallback(message.getReplyCallBack())
                     .build());
-        }
-    }
-
-    private void processTenhouLog(InputCommandMessage message) throws IOException, InterruptedException {
-        String tenhouLogLink = message.getPayload().getMessageValue();
-        AddGameLogRequest addGameLogRequest = AddGameLogRequest.builder()
-                .apiToken(config.getAutobotApiToken())
-                .tournamentId(config.getTournamentId())
-                .lobbyId(config.getLobbyId())
-                .logLink(tenhouLogLink)
-                .build();
-
-        AddGameLogResponse addGameLogResponse = RestClient.sendPost(mapper,
-                RestClient.preparePostRequest(portalAddGameLogUrl, addGameLogRequest, mapper),
-                AddGameLogResponse.class);
-
-        if (addGameLogResponse!= null) {
-            commandResultsQueue.put(ResultCommandContainer.builder()
-                    .replyType(ReplyType.SEND_MESSAGE)
-                    .resultMessage(addGameLogResponse.getMessage())
-                    .replyChatId(message.getPayload().getSenderChatId())
-                    .build());
-        } else {
-            commandResultsQueue.put(ResultCommandContainer.builder()
-                    .replyType(ReplyType.SEND_MESSAGE)
+          } else {
+            commandResultsQueue.put(
+                ResultCommandContainer.builder()
+                    .replyType(getReplyType(message))
                     .resultMessage("Ошибка добавления реплея на портал!")
                     .replyChatId(message.getPayload().getSenderChatId())
+                    .platformType(message.getPlatformType())
+                    .replyCallback(message.getReplyCallBack())
                     .build());
-        }
-    }
+          }
 
-    @Override
-    public Receive createReceive() {
-        return receiveBuilder()
-                .match(
-                        InputCommandMessage.class,
-                        message -> {
-                            if (message.getType() != null) {
-                                switch (message.getType()) {
-                                    case LOG:
-                                        if (message.getPayload().getMessageValue().contains("tenhou.net")) {
-                                            processTenhouLog(message);
-                                        } else {
-                                            processMajsoulLog(message);
-                                        }
-                                        break;
-                                    default:
-                                        break;
-                                }
-                            } else {
-                                log.warn("receive untyped message!");
-                            }
-                        })
-                .matchAny(o -> log.warn("received unknown message"))
-                .build();
+        } else {
+          commandResultsQueue.put(
+              ResultCommandContainer.builder()
+                  .replyType(getReplyType(message))
+                  .resultMessage(
+                      String.format("Получен невалидный tensoul контент для реплея %s!", hash))
+                  .replyChatId(message.getPayload().getSenderChatId())
+                  .platformType(message.getPlatformType())
+                  .replyCallback(message.getReplyCallBack())
+                  .build());
+        }
+
+      } else {
+        commandResultsQueue.put(
+            ResultCommandContainer.builder()
+                .replyType(getReplyType(message))
+                .resultMessage("Не удалось сконвертировать реплей в tenhou.net формат!")
+                .replyChatId(message.getPayload().getSenderChatId())
+                .platformType(message.getPlatformType())
+                .replyCallback(message.getReplyCallBack())
+                .build());
+      }
+    } else {
+      commandResultsQueue.put(
+          ResultCommandContainer.builder()
+              .replyType(getReplyType(message))
+              .resultMessage("Не удалось извлечь id реплея, проверьте URL!")
+              .replyChatId(message.getPayload().getSenderChatId())
+              .platformType(message.getPlatformType())
+              .replyCallback(message.getReplyCallBack())
+              .build());
     }
+  }
+
+  private void processTenhouLog(InputCommandMessage message)
+      throws IOException, InterruptedException {
+    String tenhouLogLink = message.getPayload().getMessageValue();
+    AddGameLogRequest addGameLogRequest =
+        AddGameLogRequest.builder()
+            .apiToken(config.getAutobotApiToken())
+            .tournamentId(config.getTournamentId())
+            .lobbyId(config.getLobbyId())
+            .logLink(tenhouLogLink)
+            .build();
+
+    Optional<AddGameLogResponse> addGameLogResponse =
+        RestClient.sendPost(
+            mapper,
+            RestClient.preparePostRequest(portalAddGameLogUrl, addGameLogRequest, mapper),
+            AddGameLogResponse.class);
+
+    if (addGameLogResponse.isPresent()) {
+      commandResultsQueue.put(
+          ResultCommandContainer.builder()
+              .replyType(getReplyType(message))
+              .resultMessage(addGameLogResponse.get().getMessage())
+              .replyChatId(message.getPayload().getSenderChatId())
+              .platformType(message.getPlatformType())
+              .replyCallback(message.getReplyCallBack())
+              .build());
+    } else {
+      commandResultsQueue.put(
+          ResultCommandContainer.builder()
+              .replyType(getReplyType(message))
+              .resultMessage("Ошибка добавления реплея на портал!")
+              .replyChatId(message.getPayload().getSenderChatId())
+              .platformType(message.getPlatformType())
+              .replyCallback(message.getReplyCallBack())
+              .build());
+    }
+  }
+
+  @Override
+  public Receive createReceive() {
+    return receiveBuilder()
+        .match(
+            InputCommandMessage.class,
+            message -> {
+              if (message.getType() != null) {
+                switch (message.getType()) {
+                  case LOG:
+                    if (message.getPayload().getMessageValue().contains("tenhou.net")) {
+                      processTenhouLog(message);
+                    } else {
+                      processMajsoulLog(message);
+                    }
+                    break;
+                  default:
+                    break;
+                }
+              } else {
+                log.warn("receive untyped message!");
+              }
+            })
+        .matchAny(o -> log.warn("received unknown message"))
+        .build();
+  }
 }

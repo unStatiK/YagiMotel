@@ -1,40 +1,58 @@
 package org.yagi.motel.bot.handler;
 
 import akka.actor.ActorRef;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.yagi.motel.bot.CommandContext;
+import java.util.Set;
 import org.yagi.motel.bot.CommandType;
+import org.yagi.motel.bot.context.CommandContext;
+import org.yagi.motel.bot.holder.PlatformCallbacksHolder;
 import org.yagi.motel.config.AppConfig;
 import org.yagi.motel.message.InputCommandMessage;
 import org.yagi.motel.model.container.InputCommandContainer;
 
-import java.util.function.Function;
-
+@SuppressWarnings("checkstyle:MissingJavadocType")
 public class StatusCommandHandler extends BaseHandler implements CommandHandler {
 
-    public StatusCommandHandler(AppConfig config,
-                                ActorRef commandDispatcherActor,
-                                Function<SendMessage, Void> tgSendMessageExecuteCallback) {
-        super(config, commandDispatcherActor, tgSendMessageExecuteCallback);
+  public StatusCommandHandler(
+      AppConfig config,
+      ActorRef commandDispatcherActor,
+      PlatformCallbacksHolder platformCallbacksHolder,
+      Set<Long> allowedChatIds) {
+    super(config, commandDispatcherActor, platformCallbacksHolder, allowedChatIds);
+  }
+
+  @Override
+  public void handleCommand(final CommandContext context) {
+    if (!checkPermission(context)) {
+      return;
     }
 
-    @Override
-    public void handleCommand(final CommandContext context) {
-        String[] commandArgs = context.getCommandArgs();
-        if (commandArgs.length >= 1) {
-            getCommandDispatcherActor().tell(InputCommandMessage.builder()
-                            .type(getType())
-                            .payload(InputCommandContainer.builder()
-                                    .messageValue("")
-                                    .senderChatId(context.getSenderChatId())
-                                    .build())
-                            .build(),
-                    ActorRef.noSender());
-        }
+    String[] commandArgs = context.getCommandArgs();
+    if (commandArgs.length >= 1) {
+      getCommandDispatcherActor()
+          .tell(
+              InputCommandMessage.builder()
+                  .type(getType())
+                  .payload(
+                      InputCommandContainer.builder()
+                          .messageValue("")
+                          .senderChatId(context.getSenderChatId())
+                          .build())
+                  .platformType(context.getPlatformType())
+                  .replyCallBack(context.getReplyCallback())
+                  .requestedResponseLang(context.getRequestedResponseLang())
+                  .build(),
+              ActorRef.noSender());
     }
+  }
 
-    @Override
-    public CommandType getType() {
-        return CommandType.STATUS;
-    }
+
+  @Override
+  public boolean checkPermission(CommandContext context) {
+    return super.checkPermission(context);
+  }
+
+  @Override
+  public CommandType getType() {
+    return CommandType.STATUS;
+  }
 }

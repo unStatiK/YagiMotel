@@ -42,7 +42,7 @@ public class KernelTest {
                 final CommandDispatchersHolder commandDispatchersHolder = CommandDispatchersHolder.builder()
                         .logCommandDispatcherActor(logCommandDispatcher)
                         .build();
-                final Props commandDispatcherProps = Props.create(CommandDispatcherActor.class, commandDispatchersHolder, commandResultsQueue);
+                final Props commandDispatcherProps = Props.create(CommandDispatcherActor.class, commandDispatchersHolder);
                 final ActorRef commandDispatcher = actorSystem.actorOf(commandDispatcherProps);
 
                 final TestKit probe = new TestKit(actorSystem);
