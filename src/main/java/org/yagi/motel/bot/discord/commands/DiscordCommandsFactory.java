@@ -51,8 +51,8 @@ public class DiscordCommandsFactory {
   }
 
   @SuppressWarnings("checkstyle:MissingJavadocMethod")
-  public static ApplicationCommandRequest createStatusCommand(DiscordClient client,
-                                                              AppConfig config) {
+  public static ApplicationCommandRequest createStatusCommand(
+      DiscordClient client, AppConfig config) {
     ApplicationCommandRequest greetStatusRequest =
         ApplicationCommandRequest.builder()
             .name("status")
@@ -63,5 +63,21 @@ public class DiscordCommandsFactory {
         .createGlobalApplicationCommand(config.getDiscord().getApplicationId(), greetStatusRequest)
         .block();
     return greetStatusRequest;
+  }
+
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
+  public static ApplicationCommandRequest createUpdateTeamsCommand(
+      DiscordClient client, AppConfig config) {
+    ApplicationCommandRequest updateTeamsCommandRequest =
+        ApplicationCommandRequest.builder()
+            .name("update_teams")
+            .description("Send team names to pantheon over portal")
+            .build();
+    client
+        .getApplicationService()
+        .createGlobalApplicationCommand(
+            config.getDiscord().getApplicationId(), updateTeamsCommandRequest)
+        .block();
+    return updateTeamsCommandRequest;
   }
 }

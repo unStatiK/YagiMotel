@@ -15,4 +15,6 @@ public class DiscordProperties {
   private Long ruConfirmationTournamentChannelId;
   private Long enConfirmationTournamentChannelId;
   private Long gameLogsChannelId;
+  private Integer messagesThreadNumber;
+  private Integer messagesQueueCapacity;
 }

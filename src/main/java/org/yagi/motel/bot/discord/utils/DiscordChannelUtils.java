@@ -2,12 +2,12 @@ package org.yagi.motel.bot.discord.utils;
 
 import java.util.Optional;
 import lombok.experimental.UtilityClass;
-import org.yagi.motel.bot.PortalNotificationLang;
-import org.yagi.motel.bot.PortalNotificationMessageType;
 import org.yagi.motel.config.AppConfig;
 import org.yagi.motel.config.properties.DiscordProperties;
-import org.yagi.motel.model.container.NotificationContainer;
-import org.yagi.motel.model.enums.Lang;
+import org.yagi.motel.kernel.enums.PortalNotificationLang;
+import org.yagi.motel.kernel.enums.PortalNotificationMessageType;
+import org.yagi.motel.kernel.model.container.NotificationContainer;
+import org.yagi.motel.kernel.model.enums.Lang;
 
 @UtilityClass
 @SuppressWarnings("checkstyle:MissingJavadocType")
@@ -59,6 +59,7 @@ public class DiscordChannelUtils {
     return Optional.empty();
   }
 
+  // todo: investigate why not used
   private static Optional<Long> getDiscordConfirmationChatId(
       NotificationContainer notificationContainer, AppConfig config) {
     if (notificationContainer.getLang() == PortalNotificationLang.EN) {

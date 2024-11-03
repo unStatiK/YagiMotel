@@ -9,27 +9,38 @@ import org.yagi.motel.config.AppConfig;
 @UtilityClass
 @SuppressWarnings("checkstyle:MissingJavadocType")
 public class TelegramCommandPermissionsProvider {
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
   public static Set<Long> getStartServeCommandPermissions(AppConfig config) {
     return getIds(config.getTelegram().getTgAdminChatId());
   }
 
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
   public static Set<Long> getStopServeCommandPermissions(AppConfig config) {
     return getIds(config.getTelegram().getTgAdminChatId());
   }
 
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
   public static Set<Long> getStartRegistrationCommandPermissions(AppConfig config) {
     return getIds(config.getTelegram().getTgAdminChatId());
   }
 
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
   public static Set<Long> getCloseRegistrationCommandPermissions(AppConfig config) {
     return getIds(config.getTelegram().getTgAdminChatId());
   }
 
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
   public static Set<Long> getMeCommandPermissions(AppConfig config) {
     return getIds(config.getTelegram().getTournamentChatId());
   }
 
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
   public static Set<Long> getAddCommandPermissions(AppConfig config) {
+    return getIds(config.getTelegram().getTgAdminChatId());
+  }
+
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
+  public static Set<Long> getUpdateTeamsCommandPermissions(AppConfig config) {
     return getIds(config.getTelegram().getTgAdminChatId());
   }
 

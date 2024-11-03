@@ -10,4 +10,6 @@ public class TelegramProperties {
   private String tgBotToken;
   private Long tgAdminChatId;
   private Long tournamentChatId;
+  private Integer messagesThreadNumber;
+  private Integer messagesQueueCapacity;
 }

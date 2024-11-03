@@ -4,6 +4,8 @@ telegram:
   tgBotToken: 'token'
   tgAdminChatId: -1
   tournamentChatId: -1
+  messagesThreadNumber: 1
+  messagesQueueCapacity: 100
 discord:
   enable: false
   applicationId: 1245357947564068956
@@ -15,6 +17,8 @@ discord:
   ruConfirmationTournamentChannelId: -1
   enConfirmationTournamentChannelId: -1
   gameLogsChannelId: -1
+  messagesThreadNumber: 1
+  messagesQueueCapacity: 100
 commandResultQueueCapacity: 100
 notificationQueueCapacity: 100
 eventsMailboxPool: 2

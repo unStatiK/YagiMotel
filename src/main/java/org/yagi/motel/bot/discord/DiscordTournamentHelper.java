@@ -3,6 +3,7 @@ package org.yagi.motel.bot.discord;
 import static org.yagi.motel.bot.discord.commands.DiscordCommandsFactory.createLogCommand;
 import static org.yagi.motel.bot.discord.commands.DiscordCommandsFactory.createMeCommand;
 import static org.yagi.motel.bot.discord.commands.DiscordCommandsFactory.createStatusCommand;
+import static org.yagi.motel.bot.discord.commands.DiscordCommandsFactory.createUpdateTeamsCommand;
 import static org.yagi.motel.bot.discord.utils.DiscordChannelUtils.getRequiredLangFromChannel;
 import static org.yagi.motel.bot.discord.utils.DiscordCommandPermissionsProvider.getAddCommandPermissions;
 import static org.yagi.motel.bot.discord.utils.DiscordCommandPermissionsProvider.getCloseRegistrationCommandPermissions;
@@ -12,6 +13,7 @@ import static org.yagi.motel.bot.discord.utils.DiscordCommandPermissionsProvider
 import static org.yagi.motel.bot.discord.utils.DiscordCommandPermissionsProvider.getStartServeCommandPermissions;
 import static org.yagi.motel.bot.discord.utils.DiscordCommandPermissionsProvider.getStatusCommandPermissions;
 import static org.yagi.motel.bot.discord.utils.DiscordCommandPermissionsProvider.getStopServeCommandPermissions;
+import static org.yagi.motel.bot.discord.utils.DiscordCommandPermissionsProvider.getUpdateTeamsCommandPermissions;
 
 import akka.actor.ActorRef;
 import discord4j.common.util.Snowflake;
@@ -33,64 +35,80 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.yagi.motel.bot.PlatformType;
-import org.yagi.motel.bot.context.CommandContext;
-import org.yagi.motel.bot.context.HandlerErrorContext;
-import org.yagi.motel.bot.context.ReplyCallbackContext;
 import org.yagi.motel.bot.discord.utils.DiscordInteractionUtils;
-import org.yagi.motel.bot.handler.AddCommandHandler;
-import org.yagi.motel.bot.handler.CloseRegistrationCommandHandler;
-import org.yagi.motel.bot.handler.CommandHandler;
-import org.yagi.motel.bot.handler.LogCommandHandler;
-import org.yagi.motel.bot.handler.MeCommandHandler;
-import org.yagi.motel.bot.handler.StartRegistrationCommandHandler;
-import org.yagi.motel.bot.handler.StartServeCommandHandler;
-import org.yagi.motel.bot.handler.StatusCommandHandler;
-import org.yagi.motel.bot.handler.StopServeCommandHandler;
-import org.yagi.motel.bot.holder.PlatformCallbacksHolder;
 import org.yagi.motel.config.AppConfig;
-import org.yagi.motel.model.container.ResultCommandContainer;
-import org.yagi.motel.model.enums.IsProcessedState;
-import org.yagi.motel.repository.StateRepository;
+import org.yagi.motel.handler.AddCommandHandler;
+import org.yagi.motel.handler.CloseRegistrationCommandHandler;
+import org.yagi.motel.handler.CommandHandler;
+import org.yagi.motel.handler.LogCommandHandler;
+import org.yagi.motel.handler.MeCommandHandler;
+import org.yagi.motel.handler.StartRegistrationCommandHandler;
+import org.yagi.motel.handler.StartServeCommandHandler;
+import org.yagi.motel.handler.StatusCommandHandler;
+import org.yagi.motel.handler.StopServeCommandHandler;
+import org.yagi.motel.handler.UpdateTeamsCommandHandler;
+import org.yagi.motel.handler.context.CommandContext;
+import org.yagi.motel.handler.context.HandlerErrorContext;
+import org.yagi.motel.handler.context.ReplyCallbackContext;
+import org.yagi.motel.handler.holder.PlatformCallbacksHolder;
+import org.yagi.motel.kernel.enums.PlatformType;
+import org.yagi.motel.kernel.model.container.ResultCommandContainer;
+import org.yagi.motel.kernel.model.enums.IsProcessedState;
+import org.yagi.motel.kernel.repository.StateRepository;
 import reactor.core.publisher.Mono;
 
 @Slf4j
 @SuppressWarnings({"checkstyle:LineLength", "checkstyle:MissingJavadocType"})
-public class DiscordTournamentHelper {
+public class DiscordTournamentHelper implements Runnable {
 
   private static final String WHITESPACE_STR = " ";
   private static final String SYNC_COMMAND_PREFIX = "/sync";
+  private static final Integer COMMAND_UNIQUE_ID_LENGTH = 10;
 
   private final ExecutorService discordExecutor;
   private final DiscordClient client;
   private final AppConfig config;
   private final StateRepository stateRepository;
   private final Map<String, CommandHandler> handlers;
+  private final BlockingQueue<ResultCommandContainer> messagesQueue;
+
+  // todo: clear by timeout for TTL event
+  private final Map<Long, ApplicationCommandInteractionEvent> eventCache;
 
   @SuppressWarnings("checkstyle:MissingJavadocMethod")
   public DiscordTournamentHelper(
-      ActorRef commandDispatcherActor, AppConfig config, StateRepository stateRepository) {
+      ActorRef commandDispatcherActor,
+      ActorRef errorCommandDispatcherActor,
+      AppConfig config,
+      StateRepository stateRepository,
+      BlockingQueue<ResultCommandContainer> messagesQueue) {
     this.discordExecutor = Executors.newFixedThreadPool(2);
     this.client = DiscordClient.create(config.getDiscord().getDiscordBotToken());
     this.config = config;
     this.stateRepository = stateRepository;
+    this.messagesQueue = messagesQueue;
     final List<Object> args = new ArrayList<>();
     args.add(config);
     args.add(commandDispatcherActor);
+    args.add(errorCommandDispatcherActor);
     args.add(registerCallbacks());
 
     this.handlers = registerHandlers(args, config);
+    this.eventCache = new ConcurrentHashMap<>();
   }
 
   @SuppressWarnings({"checkstyle:OperatorWrap", "checkstyle:MissingJavadocMethod"})
-  public void run() {
+  public void start() {
     discordExecutor.execute(
         () -> {
           Mono<Void> login =
@@ -121,25 +139,6 @@ public class DiscordTournamentHelper {
         });
   }
 
-  @SuppressWarnings({"checkstyle:FallThrough", "checkstyle:MissingJavadocMethod"})
-  public void sendReply(ResultCommandContainer resultCommandContainer) {
-    try {
-      switch (resultCommandContainer.getReplyType()) {
-        case SEND_MESSAGE:
-          sendMessage(resultCommandContainer);
-          break;
-        case CALLBACK:
-          executeCallback(resultCommandContainer);
-        default:
-          break;
-      }
-    } catch (Exception ex) {
-      // todo handle
-      log.error("error while execute", ex);
-      throw new RuntimeException(ex);
-    }
-  }
-
   @SuppressWarnings("checkstyle:MissingJavadocMethod")
   public void sendNotification(String message, Long chatId) {
     client.getChannelById(Snowflake.of(chatId)).createMessage(message).block();
@@ -162,14 +161,19 @@ public class DiscordTournamentHelper {
             }
 
             if (handlers.containsKey(commandPrefix)) {
-              handlers.get(commandPrefix).handleCommand(CommandContext.builder()
-                  .commandArgs(commandArgs)
-                  .senderChatId(chatId)
-                  .username(user.getMention())
-                  .platformType(PlatformType.DISCORD)
-                  .build());
+              handlers
+                  .get(commandPrefix)
+                  .handleCommand(
+                      CommandContext.builder()
+                          .commandUniqueId(
+                              Long.valueOf(
+                                  RandomStringUtils.randomNumeric(COMMAND_UNIQUE_ID_LENGTH)))
+                          .commandArgs(commandArgs)
+                          .senderChatId(chatId)
+                          .username(user.getMention())
+                          .platformType(PlatformType.DISCORD)
+                          .build());
             }
-
           }
         }
       }
@@ -189,18 +193,25 @@ public class DiscordTournamentHelper {
               DiscordInteractionUtils.extractInteractionName(interaction);
           if (commandName.isPresent()) {
             String commandPrefix = "/" + commandName.get();
-            String[] commandArgs = DiscordInteractionUtils.prepareHandlerArgs(commandPrefix,
-                DiscordInteractionUtils.extractArgsFromInteraction(interaction));
+            String[] commandArgs =
+                DiscordInteractionUtils.prepareHandlerArgs(
+                    commandPrefix, DiscordInteractionUtils.extractArgsFromInteraction(interaction));
             if (commandArgs.length >= 1) {
               if (handlers.containsKey(commandPrefix)) {
-                handlers.get(commandPrefix).handleCommand(CommandContext.builder()
-                    .commandArgs(commandArgs)
-                    .senderChatId(chatId)
-                    .username(user.getNicknameMention())
-                    .platformType(PlatformType.DISCORD)
-                    .replyCallback(prepareCallback(event))
-                    .requestedResponseLang(getRequiredLangFromChannel(chatId, config))
-                    .build());
+                final Long eventKey =
+                    Long.valueOf(RandomStringUtils.randomNumeric(COMMAND_UNIQUE_ID_LENGTH));
+                eventCache.putIfAbsent(eventKey, event);
+                handlers
+                    .get(commandPrefix)
+                    .handleCommand(
+                        CommandContext.builder()
+                            .commandUniqueId(eventKey)
+                            .commandArgs(commandArgs)
+                            .senderChatId(chatId)
+                            .username(user.getNicknameMention())
+                            .platformType(PlatformType.DISCORD)
+                            .requestedResponseLang(getRequiredLangFromChannel(chatId, config))
+                            .build());
               }
             }
           }
@@ -209,49 +220,55 @@ public class DiscordTournamentHelper {
     }
   }
 
-  private void executeCallback(ResultCommandContainer resultCommandContainer) {
-    resultCommandContainer.getReplyCallback().accept(resultCommandContainer.getResultMessage());
-  }
-
-  private Consumer<String> prepareCallback(ApplicationCommandInteractionEvent event) {
-    return (replyMessage) -> event.editReply(replyMessage).block();
-  }
-
-  private void sendMessage(ResultCommandContainer resultCommandContainer) {
-    client
-        .getChannelById(Snowflake.of(resultCommandContainer.getReplyChatId()))
-        .createMessage(resultCommandContainer.getResultMessage())
-        .block();
-  }
-
   private PlatformCallbacksHolder registerCallbacks() {
     return PlatformCallbacksHolder.builder()
-        .platformSendMessageCallback(prepareSendMessageCallback())
-        .platformErrorReplySupplier(prepareErrorReplySupplier())
+        .platformErrorMessageSupplier(prepareErrorMessageSupplier())
         .platformAdminChatIdSupplier(prepareGetAdminChatIdSupplier())
         .build();
   }
 
   private Map<String, CommandHandler> registerHandlers(final List<Object> args, AppConfig config) {
     final Map<String, CommandHandler> handlers = new HashMap<>();
-    handlers.putIfAbsent("/log", registerCommandHandler(LogCommandHandler.class,
-        getHandlerArgs(args, getLogCommandPermissions(config))));
-    handlers.putIfAbsent("/start_serve", registerCommandHandler(StartServeCommandHandler.class,
-        getHandlerArgs(args, getStartServeCommandPermissions(config))));
-    handlers.putIfAbsent("/stop_serve", registerCommandHandler(StopServeCommandHandler.class,
-        getHandlerArgs(args, getStopServeCommandPermissions(config))));
-    handlers.putIfAbsent("/start_registration", registerCommandHandler(
-        StartRegistrationCommandHandler.class,
-        getHandlerArgs(args, getStartRegistrationCommandPermissions(config))));
-    handlers.putIfAbsent("/close_registration", registerCommandHandler(
-        CloseRegistrationCommandHandler.class,
-        getHandlerArgs(args, getCloseRegistrationCommandPermissions(config))));
-    handlers.putIfAbsent("/me", registerCommandHandler(MeCommandHandler.class,
-        getHandlerArgs(args, getMeCommandPermissions(config))));
-    handlers.putIfAbsent("/add", registerCommandHandler(AddCommandHandler.class,
-        getHandlerArgs(args, getAddCommandPermissions(config))));
-    handlers.putIfAbsent("/status", registerCommandHandler(StatusCommandHandler.class,
-        getHandlerArgs(args, getStatusCommandPermissions(config))));
+    handlers.putIfAbsent(
+        "/log",
+        registerCommandHandler(
+            LogCommandHandler.class, getHandlerArgs(args, getLogCommandPermissions(config))));
+    handlers.putIfAbsent(
+        "/start_serve",
+        registerCommandHandler(
+            StartServeCommandHandler.class,
+            getHandlerArgs(args, getStartServeCommandPermissions(config))));
+    handlers.putIfAbsent(
+        "/stop_serve",
+        registerCommandHandler(
+            StopServeCommandHandler.class,
+            getHandlerArgs(args, getStopServeCommandPermissions(config))));
+    handlers.putIfAbsent(
+        "/start_registration",
+        registerCommandHandler(
+            StartRegistrationCommandHandler.class,
+            getHandlerArgs(args, getStartRegistrationCommandPermissions(config))));
+    handlers.putIfAbsent(
+        "/close_registration",
+        registerCommandHandler(
+            CloseRegistrationCommandHandler.class,
+            getHandlerArgs(args, getCloseRegistrationCommandPermissions(config))));
+    handlers.putIfAbsent(
+        "/me",
+        registerCommandHandler(
+            MeCommandHandler.class, getHandlerArgs(args, getMeCommandPermissions(config))));
+    handlers.putIfAbsent(
+        "/add",
+        registerCommandHandler(
+            AddCommandHandler.class, getHandlerArgs(args, getAddCommandPermissions(config))));
+    handlers.putIfAbsent(
+        "/status",
+        registerCommandHandler(
+            StatusCommandHandler.class, getHandlerArgs(args, getStatusCommandPermissions(config))));
+    handlers.putIfAbsent(
+        "/update_teams",
+        registerCommandHandler(
+            UpdateTeamsCommandHandler.class, getHandlerArgs(args, getUpdateTeamsCommandPermissions(config))));
     return Collections.unmodifiableMap(handlers);
   }
 
@@ -265,7 +282,11 @@ public class DiscordTournamentHelper {
       Class<? extends CommandHandler> handlerClazz, Object[] args) {
     try {
       return handlerClazz
-          .getDeclaredConstructor(AppConfig.class, ActorRef.class, PlatformCallbacksHolder.class,
+          .getDeclaredConstructor(
+              AppConfig.class,
+              ActorRef.class,
+              ActorRef.class,
+              PlatformCallbacksHolder.class,
               Set.class)
           .newInstance(args);
     } catch (Exception ex) {
@@ -291,34 +312,32 @@ public class DiscordTournamentHelper {
   }
 
   @SuppressWarnings("checkstyle:MissingSwitchDefault")
-  private Function<HandlerErrorContext, Optional<ReplyCallbackContext>> prepareErrorReplySupplier() {
+  private Function<HandlerErrorContext, Optional<String>> prepareErrorMessageSupplier() {
     return handlerErrorContext -> {
       switch (handlerErrorContext.getErrorType()) {
         case COMMAND_NOT_ALLOWED:
           return Optional.of(
-              ReplyCallbackContext.builder()
-                  .targetChatId(handlerErrorContext.getContext().getSenderChatId())
-                  .text(String.format("%s, command not allowed on this channel or for you!",
-                      handlerErrorContext.getContext().getUsername()))
-                  .replyCallback(handlerErrorContext.getContext().getReplyCallback())
-                  .build());
+              String.format(
+                  "%s, command not allowed on this channel or for you!",
+                  handlerErrorContext.getContext().getUsername()));
         case MISSED_USERNAME:
-          return Optional.of(
-              ReplyCallbackContext.builder()
-                  .targetChatId(handlerErrorContext.getContext().getSenderChatId())
-                  .text("Username is missed!")
-                  .replyCallback(handlerErrorContext.getContext().getReplyCallback())
-                  .build());
+          return Optional.of("Username is missed!");
         case MISSED_PLATFORM_USERNAME:
-          return Optional.of(
-              ReplyCallbackContext.builder()
-                  .targetChatId(handlerErrorContext.getContext().getSenderChatId())
-                  .text("Discord username not found!")
-                  .replyCallback(handlerErrorContext.getContext().getReplyCallback())
-                  .build());
+          return Optional.of("Discord username not found!");
       }
       return Optional.empty();
     };
+  }
+
+  private void sendEventReply(ApplicationCommandInteractionEvent event, String replyMessage) {
+    event.editReply(replyMessage).block();
+  }
+
+  private void sendMessage(ResultCommandContainer resultCommandContainer) {
+    client
+        .getChannelById(Snowflake.of(resultCommandContainer.getReplyChatId()))
+        .createMessage(resultCommandContainer.getResultMessage())
+        .block();
   }
 
   private void initCommands(DiscordClient client, AppConfig config) {
@@ -341,13 +360,41 @@ public class DiscordTournamentHelper {
     }
 
     List<ApplicationCommandRequest> commands =
-        Arrays.asList(createStatusCommand(client, config),
+        Arrays.asList(
+            createStatusCommand(client, config),
             createMeCommand(client, config),
-            createLogCommand(client, config));
+            createLogCommand(client, config),
+            createUpdateTeamsCommand(client, config));
 
     client
         .getApplicationService()
         .bulkOverwriteGlobalApplicationCommand(config.getDiscord().getApplicationId(), commands)
         .blockFirst();
+  }
+
+  @Override
+  public void run() {
+    do {
+      try {
+        ResultCommandContainer resultCommandContainer = messagesQueue.take();
+        switch (resultCommandContainer.getPlatformType()) {
+          case DISCORD:
+            ApplicationCommandInteractionEvent event =
+                resultCommandContainer.getUniqueMessageId() != null
+                    ? eventCache.remove(resultCommandContainer.getUniqueMessageId())
+                    : null;
+            if (event != null) {
+              sendEventReply(event, resultCommandContainer.getResultMessage());
+            } else {
+              sendMessage(resultCommandContainer);
+            }
+            break;
+          default:
+            break;
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    } while (!Thread.interrupted());
   }
 }

@@ -3,13 +3,14 @@ package org.yagi.motel.request;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Assert;
 import org.junit.Test;
-import org.yagi.motel.actor.blocked.LogCommandDispatcherActor;
 import org.yagi.motel.config.AppConfig;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
+import org.yagi.motel.http.request.GameFinishRequest;
+import org.yagi.motel.kernel.actor.blocked.LogCommandDispatcherActor;
 
 public class GameFinishRequestTest {
 

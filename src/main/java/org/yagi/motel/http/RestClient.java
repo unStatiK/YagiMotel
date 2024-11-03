@@ -58,6 +58,7 @@ public class RestClient {
     return httpPost;
   }
 
+  @SuppressWarnings("checkstyle:MissingJavadocMethod")
   public static HttpGet prepareGetRequest(String url) {
     return new HttpGet(url);
   }

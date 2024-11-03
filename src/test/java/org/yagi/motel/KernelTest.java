@@ -13,11 +13,11 @@ import java.util.concurrent.TimeUnit;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.yagi.motel.actor.CommandDispatcherActor;
-import org.yagi.motel.actor.blocked.LogCommandDispatcherActor;
 import org.yagi.motel.config.AppConfig;
-import org.yagi.motel.model.container.ResultCommandContainer;
-import org.yagi.motel.model.holder.CommandDispatchersHolder;
+import org.yagi.motel.kernel.actor.CommandDispatcherActor;
+import org.yagi.motel.kernel.actor.blocked.LogCommandDispatcherActor;
+import org.yagi.motel.kernel.model.container.ResultCommandContainer;
+import org.yagi.motel.kernel.model.holder.CommandDispatchersHolder;
 import scala.concurrent.duration.FiniteDuration;
 
 public class KernelTest {

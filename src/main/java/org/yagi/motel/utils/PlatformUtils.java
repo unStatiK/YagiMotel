@@ -1,8 +1,8 @@
 package org.yagi.motel.utils;
 
 import lombok.experimental.UtilityClass;
-import org.yagi.motel.bot.PlatformType;
 import org.yagi.motel.config.AppConfig;
+import org.yagi.motel.kernel.enums.PlatformType;
 
 @UtilityClass
 @SuppressWarnings("checkstyle:MissingJavadocType")
