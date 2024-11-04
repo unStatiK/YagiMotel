@@ -39,7 +39,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -59,7 +58,6 @@ import org.yagi.motel.handler.StopServeCommandHandler;
 import org.yagi.motel.handler.UpdateTeamsCommandHandler;
 import org.yagi.motel.handler.context.CommandContext;
 import org.yagi.motel.handler.context.HandlerErrorContext;
-import org.yagi.motel.handler.context.ReplyCallbackContext;
 import org.yagi.motel.handler.holder.PlatformCallbacksHolder;
 import org.yagi.motel.kernel.enums.PlatformType;
 import org.yagi.motel.kernel.model.container.ResultCommandContainer;
@@ -296,19 +294,6 @@ public class DiscordTournamentHelper implements Runnable {
 
   private Supplier<Long> prepareGetAdminChatIdSupplier() {
     return () -> config.getDiscord().getDiscordAdminChatId();
-  }
-
-  private Consumer<Optional<ReplyCallbackContext>> prepareSendMessageCallback() {
-    return replyCallbackContext -> {
-      replyCallbackContext.ifPresent(
-          callbackContext -> {
-            if (callbackContext.getReplyCallback() != null) {
-              callbackContext.getReplyCallback().accept(callbackContext.getText());
-            } else {
-              sendNotification(callbackContext.getText(), callbackContext.getTargetChatId());
-            }
-          });
-    };
   }
 
   @SuppressWarnings("checkstyle:MissingSwitchDefault")

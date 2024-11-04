@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +27,6 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.yagi.motel.config.AppConfig;
 import org.yagi.motel.handler.AddCommandHandler;
 import org.yagi.motel.handler.CloseRegistrationCommandHandler;
@@ -42,7 +40,6 @@ import org.yagi.motel.handler.StopServeCommandHandler;
 import org.yagi.motel.handler.UpdateTeamsCommandHandler;
 import org.yagi.motel.handler.context.CommandContext;
 import org.yagi.motel.handler.context.HandlerErrorContext;
-import org.yagi.motel.handler.context.ReplyCallbackContext;
 import org.yagi.motel.handler.holder.PlatformCallbacksHolder;
 import org.yagi.motel.kernel.enums.PlatformType;
 import org.yagi.motel.kernel.model.container.ResultCommandContainer;
@@ -187,23 +184,6 @@ public class TgTournamentHelper extends TelegramLongPollingBot implements Runnab
     return () -> config.getTelegram().getTgAdminChatId();
   }
 
-  private Consumer<Optional<ReplyCallbackContext>> prepareSendMessageCallback() {
-    return replyCallbackContext -> {
-      if (replyCallbackContext.isPresent()) {
-        try {
-          final SendMessage sendMessage = new SendMessage();
-          sendMessage.setChatId(replyCallbackContext.get().getTargetChatId());
-          sendMessage.setText(replyCallbackContext.get().getText());
-          execute(sendMessage);
-        } catch (TelegramApiException ex) {
-          // todo handle exception
-          log.error("error while execute", ex);
-          throw new RuntimeException(ex);
-        }
-      }
-    };
-  }
-
   @SuppressWarnings("checkstyle:LineLength")
   private Function<HandlerErrorContext, Optional<String>> prepareErrorMessageSupplier() {
     return handlerErrorContext -> {
@@ -259,6 +239,7 @@ public class TgTournamentHelper extends TelegramLongPollingBot implements Runnab
       SendMessage sendMessage = new SendMessage();
       sendMessage.setChatId(chatId);
       sendMessage.setText(message);
+      sendMessage.enableMarkdownV2(true);
       execute(sendMessage);
     } catch (Exception ex) {
       // todo handle
