@@ -46,7 +46,7 @@ cp config/example.config.yaml bin/YagiMotel/bin/config/
 cd bin/YagiMotel/bin/
 ```
 8. Edit ```config/config.yaml```
-9. Run YagiMotelbot!
+9. Run YagiMotel bot!
 ```
 . prod_export.sh && ./YagiMotel
 ```
